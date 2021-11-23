@@ -1,0 +1,16 @@
+key:
+  # key or token
+
+  # this is VERY INSECURE AND DON'T NOT USE
+  # key will be stored here IN PLAIN TEXT and should not be used
+  # key: Keyhere
+  keyring:
+    # Key will be stored in keyring
+    # to set key use "python fsuploader.py -s"
+    enabled: true
+    # what keyring to be used
+    keyring: default
+
+upload:
+  # sharex config
+  config: ~/.config/fsuploader/sharexconf/

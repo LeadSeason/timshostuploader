@@ -40,7 +40,6 @@ except ImportError:
     logln("keyring is required to store keys securly\nhttps://pypi.org/project/keyring/", pcolor.WARNING)
 
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-u", "--upload", help="Upload image to host", action="store_true")
@@ -60,7 +59,7 @@ def main():
             # else:
             #     key = args.set_key
             keyring.set_password("fsuploader", "pyscript", args.set_key)
-            
+
 
 
 

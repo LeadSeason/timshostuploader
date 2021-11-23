@@ -2,6 +2,7 @@ import os
 import sys
 import traceback
 import argparse
+import getpass
 
 
 class pcolor:
@@ -36,19 +37,32 @@ except ImportError:
 try:
     import keyring
 except ImportError:
-    logln("keyring is required to store key securly\nhttps://pypi.org/project/keyring/", pcolor.WARNING)
-    sys.exit(1)
+    logln("keyring is required to store keys securly\nhttps://pypi.org/project/keyring/", pcolor.WARNING)
+
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-u", "--upload", help="Upload image to host")
-    parser.add_argument("-S", "--set-key", help="Sets key intothe keyring") 
+    parser.add_argument("-u", "--upload", help="Upload image to host", action="store_true")
+    parser.add_argument("-S", "--set-key", help="Sets key intothe keyring")
     parser.add_argument("-c", "--config", help="point to the conf file will default to ~/.config/fsuploader.yaml")
     args = parser.parse_args()
+    print(args)
 
-    if keyring:
-        keyring.
+    if "keyring" in sys.modules:
+        """
+            Loads key from keyring or set keys
+        """
+        print(keyring.get_password("fsuploader", "pyscript"))
+        if args.set_key is not None:
+            # if args.set_key is True:
+            #     key = getpass.getpass("Enter key (Will be hidden):")
+            # else:
+            #     key = args.set_key
+            keyring.set_password("fsuploader", "pyscript", args.set_key)
+            
+
+
 
 
 if __name__ == "__main__":

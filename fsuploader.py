@@ -32,7 +32,6 @@ try:
     import yaml
 except ImportError:
     logln("PyYaml is required to parse configuration\nhttps://pypi.org/project/PyYAML/", pcolor.FAIL)
-    sys.exit(1)
 
 try:
     import keyring
@@ -43,7 +42,7 @@ except ImportError:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-u", "--upload", help="Upload image to host", action="store_true")
-    parser.add_argument("-S", "--set-key", help="Sets key intothe keyring")
+    parser.add_argument("-S", "--set-key", help="Sets key into the keyring")
     parser.add_argument("-c", "--config", help="point to the conf file will default to ~/.config/fsuploader.yaml")
     args = parser.parse_args()
     print(args)

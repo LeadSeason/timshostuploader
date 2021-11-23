@@ -12,5 +12,23 @@ key:
     keyring: default
 
 upload:
-  # sharex config
+  # upload config
   config: ~/.config/fsuploader/sharexconf/
+
+saving:
+  # save image to local machine
+  enabled: false
+  path: ~/Pictures/fsupload/
+  # make dir if it doesnt exists
+  automkdir: false
+
+notification:
+  # requires pynotification
+  enabled: false
+  # send errors in notifications
+  errors: false
+
+logging:
+  # logerrors
+  enabled: true
+  path: ~/.cache/fsupload

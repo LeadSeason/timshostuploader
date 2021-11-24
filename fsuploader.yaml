@@ -14,7 +14,7 @@ key:
 
 upload:
   # upload config
-  config: ~/.config/fsuploader/sharexconf/
+  config: ~/.config/fsuploader/upconf/config.json
 
 saving:
   # save image to local machine

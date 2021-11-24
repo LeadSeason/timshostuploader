@@ -5,6 +5,7 @@ import argparse
 import getpass
 import base64
 import datetime
+import re
 
 
 class pcolor:
@@ -51,6 +52,7 @@ def save_error(message, error_log_path):
         if not os.path.isfile(filepath):
             with open(filepath, "w") as io:
                 io.write(message)
+            print(f"saved to {filepath}")
             break
 
 
@@ -86,18 +88,18 @@ def main():
     parser.add_argument("-s", "--set-key", help="Sets key into the keyring", action="store_true")
     parser.add_argument("-c", "--config", help="point to the conf file will default to ~/.config/fsuploader/fsuploader.yaml")
     parser.add_argument("-k", "--mk-conf", help="create config", action="store_true")
+    parser.add_argument("-f", "--force", help="Force", action="store_true")
     args = parser.parse_args()
 
-    if args.mk_conf irs True:
-        if not os.path.isdir(os.getenv("HOME") + "/.config/fsuploader"):
-            os.mkdir(os.getenv("HOME") + "/.config/fsuploader/")
+    if args.mk_conf is True:
+        os.mkdir(os.getenv("HOME") + "/.config/fsuploader/", exist_ok=True)
 
-        if not os.path.isfile(os.getenv("HOME") + "/.config/fsuploader/fsuploader.yaml"):
+        if not os.path.isfile(os.getenv("HOME") + "/.config/fsuploader/fsuploader.yaml") or args.force:
             with open(os.getenv("HOME") + "/.config/fsuploader/fsuploader.yaml", "w") as io:
-                io.write(base64.b64decode("a2V5OgogICMga2V5IG9yIHRva2VuCgogICMgdGhpcyBpcyBWRVJZIElOU0VDVVJFIEFORCBET04nVCBOT1QgVVNFCiAgIyBrZXkgd2lsbCBiZSBzdG9yZWQgaGVyZSBJTiBQTEFJTiBURVhUIGFuZCBzaG91bGQgbm90IGJlIHVzZWQKICAjIGtleTogS2V5aGVyZQogIGtleXJpbmc6CiAgICAjIEtleSB3aWxsIGJlIHN0b3JlZCBpbiBrZXlyaW5nCiAgICAjIEtleXJpbmcgbW9kdWxlIHdpbGwgYmUgbmVlZGVkIHRvIHVzZSB0aGlzIGZ1bmN0aW9uYWxpdHkKICAgICMgdG8gc2V0IGtleSB1c2UgInB5dGhvbiBmc3VwbG9hZGVyLnB5IC1zIgogICAgZW5hYmxlZDogdHJ1ZQogICAgIyB3aGF0IGtleXJpbmcgdG8gYmUgdXNlZAogICAga2V5cmluZzogZGVmYXVsdAoKdXBsb2FkOgogICMgdXBsb2FkIGNvbmZpZwogIGNvbmZpZzogfi8uY29uZmlnL2ZzdXBsb2FkZXIvc2hhcmV4Y29uZi8KCnNhdmluZzoKICAjIHNhdmUgaW1hZ2UgdG8gbG9jYWwgbWFjaGluZQogIGVuYWJsZWQ6IGZhbHNlCiAgcGF0aDogfi9QaWN0dXJlcy9mc3VwbG9hZC8KICAjIG1ha2UgZGlyIGlmIGl0IGRvZXNudCBleGlzdHMKICBhdXRvbWtkaXI6IGZhbHNlCgpub3RpZmljYXRpb246CiAgIyByZXF1aXJlcyBweW5vdGlmaWNhdGlvbgogIGVuYWJsZWQ6IGZhbHNlCiAgIyBzZW5kIGVycm9ycyBpbiBub3RpZmljYXRpb25zCiAgZXJyb3JzOiBmYWxzZQoKbG9nZ2luZzoKICAjIGxvZ2Vycm9ycwogIGVuYWJsZWQ6IHRydWUKICBwYXRoOiB+Ly5jYWNoZS9mc3VwbG9hZA==".encode("ascii")).decode("ascii"))
+                io.write(base64.b64decode("a2V5OgogICMga2V5IG9yIHRva2VuCgogICMgdGhpcyBpcyBWRVJZIElOU0VDVVJFIEFORCBET04nVCBOT1QgVVNFCiAgIyBrZXkgd2lsbCBiZSBzdG9yZWQgaGVyZSBJTiBQTEFJTiBURVhUIGFuZCBzaG91bGQgbm90IGJlIHVzZWQKICBrZXk6IEtleWhlcmUKICBrZXlyaW5nOgogICAgIyBLZXkgd2lsbCBiZSBzdG9yZWQgaW4ga2V5cmluZwogICAgIyBLZXlyaW5nIG1vZHVsZSB3aWxsIGJlIG5lZWRlZCB0byB1c2UgdGhpcyBmdW5jdGlvbmFsaXR5CiAgICAjIHRvIHNldCBrZXkgdXNlICJweXRob24gZnN1cGxvYWRlci5weSAtcyIKICAgIGVuYWJsZWQ6IHRydWUKICAgICMgd2hhdCBrZXlyaW5nIHRvIGJlIHVzZWQKICAgIGtleXJpbmc6IGRlZmF1bHQKCnVwbG9hZDoKICAjIHVwbG9hZCBjb25maWcKICBjb25maWc6IH4vLmNvbmZpZy9mc3VwbG9hZGVyL3VwY29uZi9jb25maWcuanNvbgoKc2F2aW5nOgogICMgc2F2ZSBpbWFnZSB0byBsb2NhbCBtYWNoaW5lCiAgZW5hYmxlZDogZmFsc2UKICBwYXRoOiB+L1BpY3R1cmVzL2ZzdXBsb2FkLwogICMgbWFrZSBkaXIgaWYgaXQgZG9lc250IGV4aXN0cwogIGF1dG9ta2RpcjogZmFsc2UKCm5vdGlmaWNhdGlvbjoKICAjIHJlcXVpcmVzIHB5bm90aWZpY2F0aW9uCiAgZW5hYmxlZDogZmFsc2UKICAjIHNlbmQgZXJyb3JzIGluIG5vdGlmaWNhdGlvbnMKICBlcnJvcnM6IGZhbHNlCgpsb2dnaW5nOgogICMgbG9nZXJyb3JzCiAgZW5hYmxlZDogdHJ1ZQogIHBhdGg6IH4vLmNhY2hlL2ZzdXBsb2Fk".encode("ascii")).decode("ascii"))
             logln("made file ~/.config/fsuploader/fsuploader.yaml with default configuration")
         else:
-            logln("Configuration file present. Please move or delete\n~/.config/fsuploader/fsuploader.yaml", pcolor.WARNING)
+            logln("Configuration file present. Please move or delete\n~/.config/fsuploader/fsuploader.yaml\nor use -f flag to force replacement", pcolor.WARNING)
             sys.exit(1)
 
     try:
@@ -117,11 +119,36 @@ def main():
                 keyring.set_password("fsuploader", "pyscript", key)
 
             key = keyring.get_password("fsuploader", "pyscript")
-    
+
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
         logln("ERROR", pcolor.FAIL)
-        save_error(traceback.format_exc())
+        traceback.print_exc()
+        try:
+            with open(os.getenv("HOME") + "/.config/fsuploader/fsuploader.yaml") as io:
+                conf = yaml.safe_load(io)
+        except FileNotFoundError:
+            logln("Configuration file not detected\nsaving error in ~/.cache/fsuploader", pcolor.FAIL)
+            errorenabled = True
+            errorsavepath = open(os.getenv("HOME") + "/.cache/fsuploader/")
+
+        else:
+            if dict.get(conf, "logging"):
+                if dict.get(conf["logging"], "enabled"):
+                    if not dict.get(conf["logging"], "path") is None:
+                        errorsavepath = dict.get(conf["logging"], "path")
+                        if not errorsavepath.endswith("/"):
+                            errorsavepath += "/"
+                        if errorsavepath.startswith("~"):
+                            errorsavepath = errorsavepath.replace("~", os.getenv("HOME"), 1)
+                    else:
+                        errorsavepath = os.getenv("HOME") + "/.cache/fsuploader/"
+                else:
+                    logln("error login disabled. error will not be saved")
+                    sys.exit(2)
+
+        os.makedirs(errorsavepath, exist_ok=True)
+        save_error(traceback.format_exc(), errorsavepath)

@@ -1,0 +1,291 @@
+#!/usr/bin/python
+
+import os
+import sys
+import traceback
+import json
+import getpass
+import argparse
+
+import asyncio
+import aiohttp
+import aiofiles
+
+import dbus
+import keyring
+import filetype
+
+
+save_path = "/home/leadseason/var/media/pictures/tims.host_uploads/"
+error_log_path = "/home/leadseason/.cache/timhostuploader-logs/"
+
+
+class bcolors:
+    OK = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    END = '\033[0m'
+    NORMAL = '\033[0m'
+
+
+async def log(arg="", color=bcolors.NORMAL, end=""):
+    if os.getenv("TERM") is not None and os.getenv("TERM") != "linux":
+        print(f"{color}{arg}{bcolors.NORMAL}", end=end, file=sys.stderr)
+
+
+async def logln(arg="", color=bcolors.NORMAL, end="\n"):
+    if os.getenv("TERM") is not None and os.getenv("TERM") != "linux":
+        print(f"{color}{arg}{bcolors.NORMAL}", end=end, file=sys.stderr)
+
+
+async def logr(arg="", color=bcolors.NORMAL, end="\r"):
+    if os.getenv("TERM") is not None and os.getenv("TERM") != "linux":
+        overwrite = "".ljust(os.get_terminal_size()[1] - len(arg), " ")
+        print(f"{color}{arg}{bcolors.NORMAL}{overwrite}", end=end, file=sys.stderr)
+
+
+async def save_error(message):
+    """
+        Saves error to error folder to be later examined
+    """
+
+    if not os.path.isdir(error_log_path):
+        os.mkdir(error_log_path)
+
+    for i in range(sys.maxsize**10):
+        filepath = f"{error_log_path}Error_{i}.log"
+        if not os.path.isfile(filepath):
+            with open(filepath, "w") as x:
+                x.write(message)
+            break
+
+
+async def clipboard_handler(data):
+    if sys.platform.lower().startswith("linux"):
+        try:
+            session_type = os.environ["XDG_SESSION_TYPE"]
+        except SyntaxError:
+            session_type = None
+
+        if session_type == "wayland":
+            os.system(f"wl-copy {data} &")
+
+        elif session_type == "X11" or session_type is None:
+            p = await asyncio.create_subprocess_exec(
+                "xsel", "-bi",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE
+            )
+            await p.communicate(input=bytes(data, "UTF-8"))
+            await p.wait()
+    else:
+        logln("please update system to linux", bcolors.WARNING)
+        exit()
+
+
+async def Notification(summary, body="", icon_path=None, app_name="Timshostuploader", replaces_id=0, actions=[], urgency=1, expire_timeout=3000):
+    """
+        Shows notification to user that image has been uploaded
+    """
+    bus_name = "org.freedesktop.Notifications"
+    bus_path = "/org/freedesktop/Notifications"
+
+    if icon_path is not None:
+        icon_uri = f"file://{os.path.abspath(icon_path)}"
+    else:
+        icon_uri = ""
+
+    hints = {
+        "urgency": int(urgency)
+    }
+
+    notfy = dbus.Interface(
+        dbus.SessionBus().get_object(
+            bus_name, bus_path
+        ),
+        bus_name
+    )
+    """
+        Freedesktop notifications standards
+        https://specifications.freedesktop.org/notification-spec/latest/ar01s09.html
+    """
+
+    notfy.Notify(app_name, replaces_id, icon_uri, summary, body, actions, hints, expire_timeout)
+
+
+async def save_to_file(image_path, url, img_format):
+    """
+        Saves Uploaded Image to local directory
+        and names the file the upload id
+    """
+    url_split = url.split("/")
+    url_id = url_split[len(url_split) - 1]
+    filename = f"{save_path}{url_id}_{img_format}"
+
+    async with aiofiles.open(filename, "wb") as x:
+        async for ix in file_sender(image_path):
+            await x.write(ix)
+    return filename
+
+
+async def file_sender(file_name="/dev/stdin", chunk_size=65536):
+    if file_name != "/dev/stdin":
+        file_size = os.path.getsize(file_name)
+        readsofar = 0
+
+    async with aiofiles.open(file_name, 'rb') as f:
+        chunk = await f.read(chunk_size)
+        while chunk:
+            yield chunk
+
+            if file_name != "/dev/stdin":
+                readsofar += len(chunk)
+                percent = readsofar * 1e2 / file_size
+                await logr(f"Uploading file ... {round(percent, 1)}")
+
+            chunk = await f.read(chunk_size)
+
+
+async def header_get():
+    cfg_user = keyring.get_password("pyuploader", "user")
+    cfg_token = keyring.get_password("pyuploader", "token")
+    if cfg_user is None or cfg_token is None:
+        await logln("Fatal", bcolors.FAIL)
+        await logln("""There is no configuration saved. either
+1. get config from site and use 'timhostuploader -i "/path/to/config/Timmy Uploader config.sxcu"'
+2. or use 'timhostuploader -s' to set manuly configuration
+configuration will be saved in the keyring""")
+        sys.exit(1)
+    return {
+        "user": cfg_user,
+        "token": cfg_token
+    }
+
+
+async def main():
+    in_file = None
+    async with aiofiles.tempfile.NamedTemporaryFile('wb+') as temp_file:
+        if len(sys.argv) == 1:
+            async for x in file_sender():
+                if x == b"screenshot aborted\n" or x == b"":
+                    await logln("Aborted", bcolors.WARNING)
+                    sys.exit(0)
+                await temp_file.write(x)
+
+            await temp_file.seek(0)
+            in_file = temp_file.name
+
+        elif len(sys.argv) == 2:
+            in_file = sys.argv[1]
+            if not os.path.isfile(in_file):
+                await logln("No such file", bcolors.FAIL)
+                sys.exit(1)
+
+        else:
+            await logln("too many arguments", bcolors.FAIL)
+            sys.exit(1)
+
+        file_name = str(os.path.basename(in_file))
+        try:
+            file_format = filetype.guess(in_file).extension
+        except AttributeError:
+            await logln("Fatal", bcolors.FAIL)
+            await logln("Unable to figure out file type")
+            sys.exit(1)
+
+        if file_format in ["png", "jpg", "jpeg"]:
+            file_type = "Image"
+        elif file_format in ["gif"]:
+            file_type = "Gif"
+        elif file_format in ["mp4", "mkv"]:
+            file_type = "Video"
+        else:
+            await logln("Fatal", bcolors.FAIL)
+            await logln(f"Timhost only supports png, gif, mp4, mkv and not {file_format}")
+            sys.exit(1)
+
+        if not file_name.endswith(f".{file_format}"):
+            file_name += f".{file_format}"
+
+        file_name.replace(" ", "_").encode("ascii", "ignore").decode("ascii")
+        valid_chars = ".-_˝abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+        file_name = "".join(x for x in file_name if x in valid_chars)
+
+        headers = await header_get()
+        formdata = aiohttp.FormData()
+        formdata.add_field("img", file_sender(file_name=in_file), filename=file_name)
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://tims.host/upload",
+                headers=headers,
+                data=formdata
+            ) as resp:
+                match resp.status:
+                    case 200:
+                        url = await resp.text()
+                        await logln(url)
+                        await clipboard_handler(url)
+                        save_file = await save_to_file(in_file, url, file_name)
+                        await Notification(f"{file_type} has been uploaded", url, icon_path=save_file)
+
+                    case 401:
+                        await logln("Access denied: Invalid Token or User ID!")
+                        await Notification("Access denied: Invalid Token or User ID!", "")
+
+                    case 418:
+                        await logln("418 I'm a teapot")
+                        await Notification("418 I'm a teapot", "")
+
+                    case _:
+                        await logln(f"""Unable to connect to Tims host\n
+                                        Error code: {resp.status} go @Tim and yell at him\n
+                                        {await resp.text()}""")
+                        await Notification("Unable to connect to Tim host",
+                                           f"Error code: {resp.status} go @Tim and yell at him\n{await resp.text()}")
+
+
+if __name__ == "__main__":
+    # logging.basicConfig(level=logging.DEBUG)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-i", "--import_conf", help="Imports the config")
+    parser.add_argument("-s", "--setcfg", help="set the config manualy", action="store_true")
+    parser.add_argument("Upload_file", nargs=argparse.REMAINDER, help="File to be uploaded")
+    parser.add_argument("-v", "--verbose", help="Verbose mode enables logging debug", action="store_true")
+    args = parser.parse_args()
+
+    if args.import_conf is not None:
+        if not os.path.isfile(args.import_conf):
+            print("No such file")
+            sys.exit(1)
+        with open(args.import_conf) as fp:
+            data = json.load(fp=fp)
+        keyring.set_password("pyuploader", "user", str(data["Headers"]["user"]))
+        keyring.set_password("pyuploader", "token", str(data["Headers"]["token"]))
+        sys.exit()
+    elif args.setcfg:
+        keyring.set_password("pyuploader", "user", getpass.getpass("Userid:"))
+        keyring.set_password("pyuploader", "token", getpass.getpass("Token:"))
+        print("config set")
+        sys.exit()
+
+    else:
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            print("Exiting")
+            print("Good bye")
+            sys.exit()
+        except keyring.errors.KeyringLocked:
+            asyncio.run(logln("Fail", bcolors.FAIL))
+            print(traceback.format_exc())
+            asyncio.run(save_error(traceback.format_exc()))
+            asyncio.run(Notification("Unable to open keyring upload failed"))
+        except Exception as e:
+            print("Fail")
+            print(traceback.format_exc())
+            asyncio.run(save_error(traceback.format_exc()))
+            asyncio.run(Notification("There was an error in the program while uploading", str(e)))

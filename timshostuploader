@@ -17,7 +17,7 @@ import filetype
 
 
 save_path = "/home/leadseason/var/media/pictures/tims.host_uploads/"
-error_log_path = "/home/leadseason/.cache/timhostuploader-logs/"
+error_log_path = "/home/leadseason/.cache/timshostuploader-logs/"
 
 
 class bcolors:
@@ -153,8 +153,8 @@ async def header_get():
     if cfg_user is None or cfg_token is None:
         await logln("Fatal", bcolors.FAIL)
         await logln("""There is no configuration saved. either
-1. get config from site and use 'timhostuploader -i "/path/to/config/Timmy Uploader config.sxcu"'
-2. or use 'timhostuploader -s' to set manuly configuration
+1. get config from site and use 'timshostuploader -i "/path/to/config/Timmy Uploader config.sxcu"'
+2. or use 'timshostuploader -s' to set manuly configuration
 configuration will be saved in the keyring""")
         sys.exit(1)
     return {
@@ -202,7 +202,7 @@ async def main():
             file_type = "Video"
         else:
             await logln("Fatal", bcolors.FAIL)
-            await logln(f"Timhost only supports png, gif, mp4, mkv and not {file_format}")
+            await logln(f"Timshost only supports png, gif, mp4, mkv and not {file_format}")
             sys.exit(1)
 
         if not file_name.endswith(f".{file_format}"):

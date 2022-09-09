@@ -3,11 +3,11 @@ idk uploads stuff to tims.host
 
 ## Use
 ```
-flameshot gui -r | timhostuploader
+flameshot gui -r | timshostuploader
 ```
 or
 ```
-grim -g "$(slurp)" - | swappy -f - -o - | /home/leadseason/.local/bin/timhostuploader
+grim -g "$(slurp)" - | swappy -f - -o - | timshostuploader
 ```
 
 # todo
